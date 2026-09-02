@@ -1504,18 +1504,18 @@ Define the commercial rules and boundaries that every later component will depen
 
 **Todo**
 
-- [ ] Define the fictional VictorIA service proposition.
-- [ ] Define Financial Planning scope.
-- [ ] Define Investment Advisory scope.
-- [ ] Define the medical doctor ICP.
-- [ ] Define career-stage segments.
-- [ ] Define qualification dimensions and weights.
-- [ ] Define qualification thresholds.
-- [ ] Define service-routing rules.
-- [ ] Define objection taxonomy.
-- [ ] Define financial-advice guardrails.
-- [ ] Define examples of acceptable and unacceptable agent behavior.
-- [ ] Review the specification for internal consistency.
+- [x] Define the fictional VictorIA service proposition.
+- [x] Define Financial Planning scope.
+- [x] Define Investment Advisory scope.
+- [x] Define the medical doctor ICP.
+- [x] Define career-stage segments.
+- [x] Define qualification dimensions and weights.
+- [x] Define qualification thresholds.
+- [x] Define service-routing rules.
+- [x] Define objection taxonomy.
+- [x] Define financial-advice guardrails.
+- [x] Define examples of acceptable and unacceptable agent behavior.
+- [x] Review the specification for internal consistency.
 
 **Deliverable:** business rules document.
 
