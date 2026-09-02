@@ -1527,21 +1527,21 @@ Create the evaluation population representing realistic medical doctor lead prof
 
 **Todo**
 
-- [ ] Finalize the synthetic persona schema.
-- [ ] Define specialty distribution.
-- [ ] Define career-stage distribution.
-- [ ] Define income and investable-asset ranges.
-- [ ] Create 10 High Fit personas.
-- [ ] Create 10 Medium Fit personas.
-- [ ] Create 5 Low Fit personas.
-- [ ] Create 5 No Fit personas.
-- [ ] Distribute objection types across personas.
-- [ ] Define expected service routing for every persona.
-- [ ] Define expected fit for every persona.
-- [ ] Define ideal next action for every persona.
-- [ ] Review personas for behavioral variety.
-- [ ] Validate that no persona contains real personal data.
-- [ ] Export the final dataset.
+- [x] Finalize the synthetic persona schema.
+- [x] Define specialty distribution.
+- [x] Define career-stage distribution.
+- [x] Define income and investable-asset ranges.
+- [x] Create 10 High Fit personas.
+- [x] Create 10 Medium Fit personas.
+- [x] Create 5 Low Fit personas.
+- [x] Create 5 No Fit personas.
+- [x] Distribute objection types across personas.
+- [x] Define expected service routing for every persona.
+- [x] Define expected fit for every persona.
+- [x] Define ideal next action for every persona.
+- [x] Review personas for behavioral variety.
+- [x] Validate that no persona contains real personal data.
+- [x] Export the final dataset.
 
 **Deliverable:** `synthetic_personas.csv`
 
