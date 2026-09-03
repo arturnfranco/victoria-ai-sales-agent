@@ -1553,26 +1553,26 @@ Implement the central conversational and commercial logic without depending on W
 
 **Todo**
 
-- [ ] Create project package structure.
-- [ ] Create conversation-state enum/schema.
-- [ ] Create service-routing schema.
-- [ ] Create qualification schema.
-- [ ] Create objection schema.
-- [ ] Create Sales Agent structured-output schema with Pydantic.
-- [ ] Implement prompt loading/versioning.
-- [ ] Create `sales_v1.md`.
-- [ ] Implement LLM service abstraction.
-- [ ] Implement Sales Agent orchestration.
-- [ ] Implement conversation-history handling.
-- [ ] Implement state transitions.
-- [ ] Implement qualification calculation.
-- [ ] Implement service routing.
-- [ ] Implement objection detection.
-- [ ] Implement booking-readiness decision.
-- [ ] Implement financial-advice guardrails.
-- [ ] Add safe handling for invalid structured output.
-- [ ] Test the core manually with representative conversations.
-- [ ] Add unit tests for deterministic sales logic.
+- [x] Create project package structure.
+- [x] Create conversation-state enum/schema.
+- [x] Create service-routing schema.
+- [x] Create qualification schema.
+- [x] Create objection schema.
+- [x] Create Sales Agent structured-output schema with Pydantic.
+- [x] Implement prompt loading/versioning.
+- [x] Create `sales_v1.md`.
+- [x] Implement LLM service abstraction.
+- [x] Implement Sales Agent orchestration.
+- [x] Implement conversation-history handling.
+- [x] Implement state transitions.
+- [x] Implement qualification calculation.
+- [x] Implement service routing.
+- [x] Implement objection detection.
+- [x] Implement booking-readiness decision.
+- [x] Implement financial-advice guardrails.
+- [x] Add safe handling for invalid structured output.
+- [x] Test the core manually with representative conversations.
+- [x] Add unit tests for deterministic sales logic.
 
 **Deliverable:** functional conversational core.
 
