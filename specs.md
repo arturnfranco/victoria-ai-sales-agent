@@ -1775,7 +1775,7 @@ Turn the working system into a clear, reproducible portfolio case.
 - [ ] Finalize `.gitignore`.
 - [ ] Create `.env.example`.
 - [ ] Verify no secrets exist in Git history.
-- [ ] Write project overview in README.
+- [x] Write project overview in README.
 - [ ] Document the business problem.
 - [ ] Document solution and user journey.
 - [ ] Add architecture diagram.

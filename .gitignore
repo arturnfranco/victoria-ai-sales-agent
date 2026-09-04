@@ -1,9 +1,15 @@
+# Python virtual environment
 .venv/
 __pycache__/
 *.py[cod]
 .pytest_cache/
 
+# Environment variables
 .env
 
+# Google API credentials
 client_secret*.json
 google_oauth_token*.json
+
+# Streamlit agent skills (environment-specific symlinks)
+.agents/skills/developing-with-streamlit
