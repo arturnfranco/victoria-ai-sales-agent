@@ -80,6 +80,7 @@ def high_fit_demo() -> None:
                 },
                 "objection": None,
                 "should_offer_booking": False,
+                "request_scope": "in_scope",
             },
             {
                 "message": (
@@ -96,6 +97,7 @@ def high_fit_demo() -> None:
                 "qualification": qualification("strong"),
                 "objection": None,
                 "should_offer_booking": True,
+                "request_scope": "in_scope",
             },
         )
     )
@@ -138,6 +140,7 @@ def no_fit_demo() -> None:
                 "qualification": qualification("none"),
                 "objection": None,
                 "should_offer_booking": False,
+                "request_scope": "in_scope",
             }
         )
     )

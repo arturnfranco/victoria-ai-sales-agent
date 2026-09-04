@@ -14,6 +14,14 @@ class LLMServiceError(RuntimeError):
     """Safe provider error that does not expose credentials or response bodies."""
 
 
+class LLMProviderError(LLMServiceError):
+    """The model provider call failed."""
+
+
+class LLMJSONDecodeError(LLMServiceError):
+    """The provider response was not valid JSON."""
+
+
 @dataclass(frozen=True)
 class LLMRequest:
     """Provider-neutral structured-generation request."""
@@ -73,9 +81,12 @@ class OpenAIResponsesService:
                 },
                 store=False,
             )
-            decoded = json.loads(response.output_text)
         except Exception as exc:
-            raise LLMServiceError("LLM structured generation failed") from exc
+            raise LLMProviderError("LLM provider call failed") from exc
+        try:
+            decoded = json.loads(response.output_text)
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise LLMJSONDecodeError("LLM structured output was not valid JSON") from exc
         if not isinstance(decoded, dict):
             raise LLMServiceError("LLM structured output must be a JSON object")
         return decoded

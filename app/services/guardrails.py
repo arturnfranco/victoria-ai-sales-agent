@@ -13,6 +13,7 @@ class GuardrailKind(str, Enum):
 
     PERSONALIZED_FINANCIAL_ADVICE = "personalized_financial_advice"
     SENSITIVE_CREDENTIALS = "sensitive_credentials"
+    OUT_OF_SCOPE = "out_of_scope"
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,14 @@ def inspect_message(text: str) -> GuardrailDecision | None:
     """Detect personalized advice and credential-handling requests."""
 
     normalized = _normalize(text)
+    code_request = re.search(
+        r"\b(?:script|codigo|programa|funcao)\b.*\b(?:python|javascript|java|sql|"
+        r"somar|calcular)\b|\b(?:python|javascript|java|sql)\b.*\b(?:script|codigo|"
+        r"programa|funcao)\b",
+        normalized,
+    )
+    if code_request:
+        return GuardrailDecision(GuardrailKind.OUT_OF_SCOPE)
     credential_terms = re.search(
         r"\b(?:senha|token|codigo de acesso|login|credencial)\b", normalized
     )

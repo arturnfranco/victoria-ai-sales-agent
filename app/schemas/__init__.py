@@ -25,6 +25,7 @@ from app.schemas.routing import RoutingSignals, ServiceRoute
 from app.schemas.sales import (
     ConversationSession,
     NextAction,
+    RequestScope,
     SalesAgentDraft,
     SalesAgentOutput,
 )
@@ -44,6 +45,7 @@ __all__ = [
     "FitLevel",
     "MessageRole",
     "NextAction",
+    "RequestScope",
     "ObjectionType",
     "QualificationEvidence",
     "QualificationResult",

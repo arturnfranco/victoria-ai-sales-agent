@@ -136,6 +136,7 @@ class SalesService:
         previous_message_count = len(previous_snapshot["messages"])
 
         booking_result: BookingResult | None = None
+        turn_id = uuid.uuid4().hex[:12]
         booking_turn = self._handle_booking_workflow(
             view.session,
             clean_content,
@@ -143,7 +144,12 @@ class SalesService:
             view.lead.email,
         )
         if booking_turn is None:
-            output = self._agent.handle_message(view.session, clean_content)
+            output = self._agent.handle_message(
+                view.session,
+                clean_content,
+                turn_id=turn_id,
+                conversation_id=str(resolved_id),
+            )
         else:
             output, booking_result = booking_turn
 
@@ -529,7 +535,8 @@ def _normalize(value: str) -> str:
 def _is_affirmative(value: str) -> bool:
     return bool(
         re.fullmatch(
-            r"\s*(?:sim(?:,? por favor)?|claro|pode ser|pode sim|seria otimo|otimo|"
+            r"\s*(?:sim(?:,? por favor)?|claro|quero(?: sim)?|gostaria|por favor|"
+            r"pode(?: sim| ser)?|seria otimo|otimo|"
             r"perfeito|confirmo|"
             r"confirmado|correto|vamos)\s*[.!]?\s*",
             value,

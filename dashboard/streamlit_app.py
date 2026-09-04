@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 
 import streamlit as st
 
@@ -16,6 +17,7 @@ from app.services.sales import (
 
 
 logger = logging.getLogger(__name__)
+logging.getLogger().setLevel(os.getenv("LOG_LEVEL", "INFO").upper())
 
 
 st.set_page_config(page_title="VictorIA", page_icon="💬", layout="wide")

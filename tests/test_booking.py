@@ -52,6 +52,7 @@ def qualified_draft(message: str, *, booking: bool) -> dict[str, Any]:
         },
         "objection": None,
         "should_offer_booking": booking,
+        "request_scope": "in_scope",
     }
 
 
@@ -136,7 +137,7 @@ def test_mock_slots_honor_weekday_period_and_custom_blackout_dates() -> None:
 
 @pytest.mark.parametrize(
     "acceptance",
-    ["Seria ótimo", "Ok, quando seria?", "Qual é a disponibilidade?"],
+    ["Quero", "Seria ótimo", "Ok, quando seria?", "Qual é a disponibilidade?"],
 )
 def test_booking_acceptance_and_availability_questions_present_slots(
     session_factory, acceptance

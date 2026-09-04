@@ -25,6 +25,15 @@ class NextAction(str, Enum):
     PRESENT_SLOTS = "present_slots"
     CONFIRM_BOOKING = "confirm_booking"
     BOOK_MEETING = "book_meeting"
+    PAUSE_DISCOVERY = "pause_discovery"
+    REDIRECT_TO_SCOPE = "redirect_to_scope"
+
+
+class RequestScope(str, Enum):
+    """Whether the current request belongs to VictorIA's commercial scope."""
+
+    IN_SCOPE = "in_scope"
+    OUT_OF_SCOPE = "out_of_scope"
 
 
 class SalesAgentDraft(BaseModel):
@@ -39,6 +48,7 @@ class SalesAgentDraft(BaseModel):
     qualification: QualificationEvidence
     objection: ObjectionType | None
     should_offer_booking: bool
+    request_scope: RequestScope
 
 
 class SalesAgentOutput(BaseModel):
@@ -68,3 +78,4 @@ class ConversationSession(BaseModel):
     messages: list[ConversationMessage] = Field(default_factory=list)
     last_output: SalesAgentOutput | None = None
     booking: BookingState = Field(default_factory=BookingState)
+    discovery_questions_asked: int = Field(default=0, ge=0)

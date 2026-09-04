@@ -33,6 +33,7 @@ def valid_discovery_response() -> dict[str, Any]:
         },
         "objection": None,
         "should_offer_booking": False,
+        "request_scope": "in_scope",
     }
 
 

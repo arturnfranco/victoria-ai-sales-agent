@@ -52,3 +52,19 @@ The Playground creates a Streamlit lead and conversation, persists every complet
 turn, and can reopen any saved conversation. The Leads and Conversations views
 read from the same repositories. Stopping Streamlit does not remove conversational
 state because the selected ID is the only chat state retained by the UI.
+
+## Failure monitoring
+
+Keep the Streamlit terminal visible during manual tests. Agent failures are
+logged with a customer-visible reference, conversation ID, category, stable
+consistency code when applicable, attempt, stage, exception type, and sanitized
+stack trace. To locate a reported reference in captured output, search for its
+identifier without the `REF-` prefix, for example:
+
+```bash
+rg '8f31abcd' streamlit.log
+```
+
+Set `LOG_LEVEL=INFO` unless more verbose library diagnostics are temporarily
+needed. Logs must not contain lead messages, provider response bodies, API keys,
+or OAuth tokens.

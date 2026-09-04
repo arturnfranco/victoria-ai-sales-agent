@@ -45,6 +45,7 @@ def draft(message: str, *, level: str = "moderate") -> dict[str, Any]:
         },
         "objection": None,
         "should_offer_booking": False,
+        "request_scope": "in_scope",
     }
 
 

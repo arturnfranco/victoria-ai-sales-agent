@@ -29,6 +29,8 @@ from app.schemas import (
 )
 from app.services.guardrails import GuardrailKind, inspect_message
 from app.services.llm import (
+    LLMJSONDecodeError,
+    LLMProviderError,
     LLMRequest,
     LLMServiceError,
     OpenAIResponsesService,
@@ -82,6 +84,7 @@ def draft(
     objection: str | None = None,
     booking: bool = False,
     evidence: dict[str, Any] | None = None,
+    request_scope: str = "in_scope",
 ) -> dict[str, Any]:
     return {
         "message": message,
@@ -98,6 +101,7 @@ def draft(
         ),
         "objection": objection,
         "should_offer_booking": booking,
+        "request_scope": request_scope,
     }
 
 
@@ -396,7 +400,19 @@ def test_openai_adapter_wraps_provider_and_json_errors() -> None:
         model="test-model",
     )
     request = LLMRequest("i", [], {}, "schema")
-    with pytest.raises(LLMServiceError, match="structured generation failed"):
+    with pytest.raises(LLMProviderError, match="provider call failed"):
+        service.complete(request)
+
+    service = OpenAIResponsesService(
+        client=SimpleNamespace(
+            responses=SimpleNamespace(
+                create=lambda **kwargs: SimpleNamespace(output_text="not-json")
+            )
+        ),
+        api_key="test-key",
+        model="test-model",
+    )
+    with pytest.raises(LLMJSONDecodeError, match="not valid JSON"):
         service.complete(request)
 
 
@@ -572,6 +588,85 @@ def test_guardrail_bypasses_llm_and_never_offers_booking() -> None:
     assert output.service is ServiceRoute.INVESTMENT_ADVISORY
     assert not output.should_offer_booking
     assert "não posso recomendar" in output.message
+
+
+def test_programming_request_is_declined_without_losing_sales_state() -> None:
+    previous = SalesAgent(QueueLLM(draft())).handle_message(
+        ConversationSession(), "Quero organizar meus investimentos."
+    )
+    session = ConversationSession(
+        stage=previous.stage,
+        last_output=previous,
+        discovery_questions_asked=1,
+    )
+    llm = QueueLLM()
+
+    output = SalesAgent(llm).handle_message(
+        session, "Faça um script Python para somar dois números"
+    )
+
+    assert not llm.requests
+    assert output.next_action is NextAction.REDIRECT_TO_SCOPE
+    assert output.stage is previous.stage
+    assert output.qualification == previous.qualification
+    assert "script" not in output.message.casefold()
+
+
+def test_structured_out_of_scope_request_preserves_state() -> None:
+    session = ConversationSession(stage=ConversationStage.DISCOVERY)
+    output = SalesAgent(
+        QueueLLM(draft(request_scope="out_of_scope"))
+    ).handle_message(session, "Conte uma receita de bolo")
+
+    assert output.next_action is NextAction.REDIRECT_TO_SCOPE
+    assert output.stage is ConversationStage.DISCOVERY
+    assert not output.should_offer_booking
+
+
+def test_discovery_question_limit_pauses_instead_of_falling_back() -> None:
+    session = ConversationSession(discovery_questions_asked=5)
+    llm = QueueLLM(draft(), draft())
+
+    output = SalesAgent(llm).handle_message(session, "Ainda não sei.")
+
+    assert len(llm.requests) == 2
+    assert output.next_action is NextAction.PAUSE_DISCOVERY
+    assert "?" not in output.message
+    assert session.discovery_questions_asked == 5
+
+
+def test_provider_failure_logs_stack_and_returns_reference(caplog) -> None:
+    llm = QueueLLM(LLMProviderError("failed"), LLMProviderError("failed"))
+
+    with caplog.at_level("WARNING"):
+        output = SalesAgent(llm).handle_message(
+            ConversationSession(),
+            "Olá",
+            turn_id="8f31abcd1234",
+            conversation_id="conversation-test",
+        )
+
+    assert "REF-8F31ABCD" in output.message
+    records = [record for record in caplog.records if "category=openai_call" in record.message]
+    assert len(records) == 2
+    assert all(record.exc_info is not None for record in records)
+    assert all("conversation-test" in record.message for record in records)
+
+
+def test_validation_failure_is_traceable_and_uses_interpretation_reply(caplog) -> None:
+    with caplog.at_level("WARNING"):
+        output = SalesAgent(QueueLLM({}, {})).handle_message(
+            ConversationSession(), turn_id="aa11bb22cc33", user_message="Olá"
+        )
+
+    assert "REF-AA11BB22" in output.message
+    assert "interpretar" in output.message
+    records = [
+        record for record in caplog.records
+        if "category=pydantic_validation" in record.message
+    ]
+    assert len(records) == 2
+    assert all(record.exc_info is not None for record in records)
 
 
 def test_invalid_output_retries_once_then_recovers() -> None:

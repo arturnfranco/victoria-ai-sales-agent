@@ -287,6 +287,12 @@ containing at least stage, service route, fit, primary pain, objection,
 qualification score, booking-offer decision, and next action. Natural-language
 history alone is not authoritative state.
 
+Discovery targets three primary questions and has a hard limit of five. After
+the limit, VictorIA must summarize and pause rather than continue interrogating
+the lead. Booking acceptance and availability requests are handled
+deterministically. Unrelated requests are declined without resetting the
+validated commercial or booking state.
+
 ## 12. Consistency review
 
 The consolidated rules are internally consistent with `specs.md` subject to the
