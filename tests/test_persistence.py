@@ -90,9 +90,15 @@ def test_database_url_normalization() -> None:
     assert normalize_database_url("sqlite:///test.db") == "sqlite:///test.db"
 
 
-def test_four_primary_tables_are_created(session_factory) -> None:
+def test_primary_tables_are_created(session_factory) -> None:
     names = set(inspect(session_factory.kw["bind"]).get_table_names())
-    assert names == {"leads", "conversations", "messages", "evaluations"}
+    assert names == {
+        "bookings",
+        "leads",
+        "conversations",
+        "messages",
+        "evaluations",
+    }
 
 
 def test_start_and_handle_persist_complete_turn(session_factory) -> None:

@@ -99,6 +99,7 @@ class Conversation(Base):
     evaluations: Mapped[list["Evaluation"]] = relationship(
         back_populates="conversation"
     )
+    booking: Mapped["Booking | None"] = relationship(back_populates="conversation")
 
 
 class Message(Base):
@@ -133,6 +134,39 @@ class Message(Base):
     )
 
     conversation: Mapped[Conversation] = relationship(back_populates="messages")
+
+
+class Booking(Base):
+    __tablename__ = "bookings"
+    __table_args__ = (
+        UniqueConstraint("conversation_id", name="uq_bookings_conversation_id"),
+        UniqueConstraint("operation_id", name="uq_bookings_operation_id"),
+        UniqueConstraint(
+            "provider", "provider_event_id", name="uq_bookings_provider_event"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    conversation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("conversations.id"), nullable=False
+    )
+    lead_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("leads.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    timezone: Mapped[str] = mapped_column(String(64), nullable=False)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    provider_event_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    meeting_url: Mapped[str] = mapped_column(Text, nullable=False)
+    operation_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
+    )
+
+    conversation: Mapped[Conversation] = relationship(back_populates="booking")
 
 
 class Evaluation(Base):

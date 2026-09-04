@@ -67,6 +67,19 @@ def render_state(view) -> None:
     )
     with st.expander("Evidências de qualificação"):
         st.json(output.qualification.model_dump(mode="json"))
+    booking = view.session.booking
+    st.subheader("Agendamento")
+    st.write({"status": booking.status.value})
+    if booking.selected_slot is not None:
+        st.write(
+            {
+                "horário_selecionado": booking.selected_slot.starts_at.strftime(
+                    "%d/%m/%Y %H:%M"
+                )
+            }
+        )
+    if booking.meeting_url:
+        st.link_button("Abrir Google Meet", booking.meeting_url)
 
 
 def render_playground(service: SalesService) -> None:
@@ -157,6 +170,7 @@ def render_leads(service: SalesService) -> None:
                 "Fit": lead.qualification_status,
                 "Score": lead.lead_score,
                 "Reunião": lead.meeting_booked,
+                "Data da reunião": lead.meeting_datetime,
                 "Criado em": lead.created_at,
             }
             for lead in leads

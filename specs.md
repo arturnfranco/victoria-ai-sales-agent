@@ -1619,21 +1619,23 @@ Complete the core commercial journey from qualified lead to scheduled human meet
 
 **Todo**
 
-- [ ] Define scheduling service interface.
-- [ ] Implement `get_available_slots()`.
-- [ ] Implement `book_meeting()`.
-- [ ] Create deterministic/mock scheduling provider.
-- [ ] Add booking states to the conversation flow.
-- [ ] Require user confirmation before booking.
-- [ ] Persist booking result.
-- [ ] Prevent the agent from claiming success after a failed booking.
-- [ ] Add deterministic booking tests.
-- [ ] Configure Google Cloud project for Calendar integration.
-- [ ] Configure Google Calendar credentials.
-- [ ] Implement Google Calendar availability lookup.
-- [ ] Implement Google Calendar event creation.
-- [ ] Replace or complement mock provider with Google Calendar provider.
-- [ ] Test the complete qualification → availability → booking flow.
+- [x] Define scheduling service interface.
+- [x] Implement `get_available_slots()`.
+- [x] Implement `book_meeting()`.
+- [x] Create deterministic/mock scheduling provider.
+- [x] Add booking states to the conversation flow.
+- [x] Require user confirmation before booking.
+- [x] Persist booking result.
+- [x] Prevent the agent from claiming success after a failed booking.
+- [x] Add deterministic booking tests.
+- [x] Implement Google OAuth credential loading and authorization utility.
+- [x] Send Calendar invitations when a lead email is available.
+- [x] Configure Google OAuth consent and desktop client for Calendar integration.
+- [x] Authorize the advisor Google account and store its refreshable OAuth token.
+- [x] Implement Google Calendar availability lookup.
+- [x] Implement Google Calendar event creation.
+- [x] Replace or complement mock provider with Google Calendar provider.
+- [x] Test the complete qualification → availability → booking flow.
 
 **Deliverable:** complete lead → meeting flow.
 

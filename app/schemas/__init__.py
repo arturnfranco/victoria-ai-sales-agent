@@ -1,5 +1,13 @@
 """Public schemas for VictorIA's sales core."""
 
+from app.schemas.booking import (
+    AvailabilityPreference,
+    BookingRequest,
+    BookingResult,
+    BookingSlot,
+    BookingState,
+    BookingStatus,
+)
 from app.schemas.conversation import (
     ConversationMessage,
     ConversationStage,
@@ -22,6 +30,12 @@ from app.schemas.sales import (
 )
 
 __all__ = [
+    "AvailabilityPreference",
+    "BookingRequest",
+    "BookingResult",
+    "BookingSlot",
+    "BookingState",
+    "BookingStatus",
     "ConversationMessage",
     "ConversationSession",
     "ConversationStage",

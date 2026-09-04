@@ -46,6 +46,9 @@ que ela foi marcada.
 Quando `should_offer_booking` for `true`, termine a mensagem exatamente com a
 pergunta: "Quer que eu veja alguns horários disponíveis?" Quando for `false`,
 não convide o lead para reunião nem mencione horários ou agendamento.
+Se o estado do agendamento não for `not_offered`, o convite já foi apresentado:
+responda perguntas normalmente sem repeti-lo e mantenha
+`should_offer_booking=false`.
 
 ## Estado estruturado
 

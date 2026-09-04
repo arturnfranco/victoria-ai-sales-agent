@@ -11,6 +11,7 @@ from app.schemas.conversation import (
 from app.schemas.objection import ObjectionType
 from app.schemas.qualification import FitLevel, QualificationEvidence
 from app.schemas.routing import RoutingSignals, ServiceRoute
+from app.schemas.booking import BookingState
 
 
 class NextAction(str, Enum):
@@ -21,6 +22,9 @@ class NextAction(str, Enum):
     OFFER_BOOKING = "offer_booking"
     CLOSE_HELPFULLY = "close_helpfully"
     RETRY_LATER = "retry_later"
+    PRESENT_SLOTS = "present_slots"
+    CONFIRM_BOOKING = "confirm_booking"
+    BOOK_MEETING = "book_meeting"
 
 
 class SalesAgentDraft(BaseModel):
@@ -63,3 +67,4 @@ class ConversationSession(BaseModel):
     prompt_version: str = "sales_v1"
     messages: list[ConversationMessage] = Field(default_factory=list)
     last_output: SalesAgentOutput | None = None
+    booking: BookingState = Field(default_factory=BookingState)

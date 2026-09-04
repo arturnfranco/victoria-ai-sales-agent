@@ -7,6 +7,7 @@ import logging
 from pydantic import ValidationError
 
 from app.schemas import (
+    BookingStatus,
     ConversationMessage,
     ConversationSession,
     ConversationStage,
@@ -85,6 +86,7 @@ class SalesAgent:
         base_instructions = (
             f"{prompt.content}\n\n"
             f"Estado estrutural atual: {session.stage.value}. "
+            f"Estado do agendamento: {session.booking.status.value}. "
             "Use apenas fatos presentes no histórico fornecido."
         )
         last_error: Exception | None = None
@@ -107,7 +109,7 @@ class SalesAgent:
             try:
                 raw = self._llm.complete(request)
                 draft = SalesAgentDraft.model_validate(raw)
-                output = self._finalize(session.stage, inbound.content, draft)
+                output = self._finalize(session, inbound.content, draft)
             except DraftConsistencyError as exc:
                 last_error = exc
                 retry_instruction = exc.retry_instruction
@@ -124,6 +126,8 @@ class SalesAgent:
                 )
                 continue
             self._record_turn(session, inbound, output)
+            if output.should_offer_booking:
+                session.booking.status = BookingStatus.OFFERED
             return output
 
         if last_error is not None:
@@ -134,19 +138,24 @@ class SalesAgent:
 
     def _finalize(
         self,
-        current_stage: ConversationStage,
+        session: ConversationSession,
         user_message: str,
         draft: SalesAgentDraft,
     ) -> SalesAgentOutput:
+        current_stage = session.stage
         result = calculate_qualification(draft.qualification)
         service = route_service(draft.routing_signals)
         objection = detect_objection(user_message, draft.objection)
-        booking_ready = should_offer_booking(
+        booking_eligible = should_offer_booking(
             fit=result.fit,
             service=service,
             primary_pain=draft.primary_pain,
             readiness=draft.qualification.readiness.level,
             objection=objection,
+        )
+        booking_ready = (
+            booking_eligible
+            and session.booking.status is BookingStatus.NOT_OFFERED
         )
         visible_booking_cta = message_offers_booking(draft.message)
         if draft.should_offer_booking is not booking_ready:
@@ -156,6 +165,12 @@ class SalesAgent:
                     f"A objeção {objection.value} está ativa. Use proposed_stage="
                     "OBJECTION, should_offer_booking=false, reconheça e trate a "
                     "objeção sem convidar para reunião, agendamento ou horários."
+                )
+            elif booking_eligible and not booking_ready:
+                retry = (
+                    "O convite de agendamento já foi apresentado. Use "
+                    "should_offer_booking=false, responda apenas à mensagem atual "
+                    "e não repita o convite nem mencione horários."
                 )
             raise DraftConsistencyError(
                 "booking CTA conflicts with deterministic policy",
@@ -189,6 +204,9 @@ class SalesAgent:
         elif booking_ready:
             stage = ConversationStage.BOOKING
             next_action = NextAction.OFFER_BOOKING
+        elif current_stage is ConversationStage.BOOKING:
+            stage = ConversationStage.BOOKING
+            next_action = NextAction.CONTINUE_DISCOVERY
         else:
             stage = draft.proposed_stage
             next_action = NextAction.CONTINUE_DISCOVERY
