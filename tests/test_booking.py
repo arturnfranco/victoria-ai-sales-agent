@@ -11,12 +11,13 @@ from sqlalchemy import select
 
 from app.agents import SalesAgent
 from app.db.base import Base
-from app.db.models import Booking
+from app.db.models import Booking, Conversation
 from app.db.session import create_session_factory
 from app.schemas import (
     AvailabilityPreference,
     BookingRequest,
     BookingStatus,
+    ConversationSession,
     ConversationStage,
 )
 from app.services.llm import LLMRequest
@@ -103,6 +104,22 @@ def make_service(session_factory, llm, scheduler=None) -> SalesService:
     )
 
 
+def force_closed(session_factory, conversation_id, *, reset_booking=False) -> None:
+    with session_factory.begin() as db:
+        conversation = db.get(Conversation, conversation_id)
+        assert conversation is not None
+        session = ConversationSession.model_validate(conversation.session_snapshot)
+        session.stage = ConversationStage.CLOSED
+        if reset_booking:
+            session.booking.status = BookingStatus.NOT_OFFERED
+            session.booking.offered_slots = []
+            session.booking.selected_slot = None
+            session.booking.operation_id = None
+        conversation.current_stage = ConversationStage.CLOSED.value
+        conversation.status = "closed"
+        conversation.session_snapshot = session.model_dump(mode="json")
+
+
 def test_mock_slots_follow_business_policy_and_skip_busy_time() -> None:
     scheduler = fixed_scheduler()
     slots = scheduler.get_available_slots()
@@ -185,15 +202,15 @@ def test_booking_understands_wednesday_afternoon_without_calling_llm(
 
 
 def test_booking_cta_is_not_repeated_while_answering_question(session_factory) -> None:
-    llm = QueueLLM(
-        discovery_draft(),
-        qualified_draft("Quer que eu veja alguns horários disponíveis?", booking=True),
-        qualified_draft(
-            "A conversa dura 60 minutos e serve para entender seu contexto.",
-            booking=False,
+    service = make_service(
+        session_factory,
+        QueueLLM(
+            discovery_draft(),
+            qualified_draft(
+                "Quer que eu veja alguns horários disponíveis?", booking=True
+            ),
         ),
     )
-    service = make_service(session_factory, llm)
     started = service.start_conversation(name="Mariana")
     service.handle_message(started.conversation.id, "Quero ajuda.")
     offered = service.handle_message(started.conversation.id, "Estou pronto para avançar.")
@@ -203,8 +220,146 @@ def test_booking_cta_is_not_repeated_while_answering_question(session_factory) -
         started.conversation.id, "Como funciona o agendamento e quanto tempo dura?"
     )
     assert answered.output.stage is ConversationStage.BOOKING
+    assert "cerca de 45 minutos" in answered.output.message
     assert "horários disponíveis" not in answered.output.message
     assert answered.view.session.booking.status is BookingStatus.OFFERED
+
+
+def test_meeting_duration_preserves_presented_slots_and_clears_time_objection(
+    session_factory,
+) -> None:
+    service = make_service(
+        session_factory,
+        QueueLLM(
+            discovery_draft(),
+            qualified_draft(
+                "Quer que eu veja alguns horários disponíveis?", booking=True
+            ),
+        ),
+    )
+    started = service.start_conversation(name="Mariana")
+    service.handle_message(started.conversation.id, "Quero ajuda.")
+    service.handle_message(started.conversation.id, "Estou pronto para avançar.")
+    slots = service.handle_message(started.conversation.id, "sim")
+    offered_slots = slots.view.session.booking.offered_slots
+
+    answered = service.handle_message(
+        started.conversation.id,
+        "Quanto tempo dura a reunião? Pois não tenho muito tempo",
+    )
+
+    assert answered.output.stage is ConversationStage.BOOKING
+    assert answered.output.objection is None
+    assert "cerca de 45 minutos" in answered.output.message
+    assert "opções que enviei" in answered.output.message
+    assert answered.view.session.booking.status is BookingStatus.SLOTS_PRESENTED
+    assert answered.view.session.booking.offered_slots == offered_slots
+
+
+def test_meeting_information_preserves_pending_confirmation(session_factory) -> None:
+    service = make_service(
+        session_factory,
+        QueueLLM(
+            discovery_draft(),
+            qualified_draft(
+                "Quer que eu veja alguns horários disponíveis?", booking=True
+            ),
+        ),
+    )
+    started = service.start_conversation(name="Mariana")
+    service.handle_message(started.conversation.id, "Quero ajuda.")
+    service.handle_message(started.conversation.id, "Estou pronto para avançar.")
+    service.handle_message(started.conversation.id, "sim")
+    pending = service.handle_message(started.conversation.id, "1")
+    selected = pending.view.session.booking.selected_slot
+
+    answered = service.handle_message(
+        started.conversation.id, "Como funciona essa reunião?"
+    )
+
+    assert answered.view.session.booking.status is BookingStatus.AWAITING_CONFIRMATION
+    assert answered.view.session.booking.selected_slot == selected
+    assert "Posso confirmar o horário" in answered.output.message
+
+
+def test_closed_booking_reengagement_uses_transcript_and_fetches_fresh_slots(
+    session_factory,
+) -> None:
+    service = make_service(
+        session_factory,
+        QueueLLM(
+            discovery_draft(),
+            qualified_draft(
+                "Quer que eu veja alguns horários disponíveis?", booking=True
+            ),
+        ),
+    )
+    started = service.start_conversation(name="Mariana")
+    service.handle_message(started.conversation.id, "Quero ajuda.")
+    qualified = service.handle_message(
+        started.conversation.id, "Estou pronto para avançar."
+    )
+    qualification = qualified.output.qualification
+    force_closed(session_factory, started.conversation.id, reset_booking=True)
+
+    reopened = service.handle_message(started.conversation.id, "Mudei de ideia")
+
+    assert reopened.output.stage is ConversationStage.BOOKING
+    assert reopened.view.conversation.status == "active"
+    assert reopened.view.session.booking.status is BookingStatus.SLOTS_PRESENTED
+    assert len(reopened.view.session.booking.offered_slots) == 3
+    assert reopened.output.qualification == qualification
+
+
+def test_relevant_message_resumes_last_nonterminal_stage(session_factory) -> None:
+    service = make_service(
+        session_factory, QueueLLM(discovery_draft(), discovery_draft())
+    )
+    started = service.start_conversation(name="Mariana")
+    service.handle_message(started.conversation.id, "Quero ajuda.")
+    force_closed(session_factory, started.conversation.id)
+
+    reopened = service.handle_message(
+        started.conversation.id, "Quero retomar minha organização financeira."
+    )
+
+    assert reopened.output.stage is ConversationStage.DISCOVERY
+    assert reopened.view.conversation.status == "active"
+
+
+def test_closed_lead_without_prior_offer_cannot_bypass_qualification(
+    session_factory,
+) -> None:
+    service = make_service(
+        session_factory, QueueLLM(discovery_draft(), discovery_draft())
+    )
+    started = service.start_conversation(name="Mariana")
+    service.handle_message(started.conversation.id, "Quero ajuda.")
+    force_closed(session_factory, started.conversation.id)
+
+    reopened = service.handle_message(
+        started.conversation.id, "Mudei de ideia, quero marcar uma reunião."
+    )
+
+    assert reopened.output.stage is ConversationStage.DISCOVERY
+    assert reopened.view.session.booking.status is BookingStatus.NOT_OFFERED
+    assert reopened.view.session.booking.offered_slots == []
+
+
+def test_out_of_scope_message_does_not_reopen_closed_conversation(
+    session_factory,
+) -> None:
+    service = make_service(session_factory, QueueLLM(discovery_draft()))
+    started = service.start_conversation(name="Mariana")
+    service.handle_message(started.conversation.id, "Quero ajuda.")
+    force_closed(session_factory, started.conversation.id)
+
+    result = service.handle_message(
+        started.conversation.id, "Faça um script Python para somar dois números."
+    )
+
+    assert result.output.stage is ConversationStage.CLOSED
+    assert result.view.conversation.status == "closed"
 
 
 def test_complete_booking_requires_selection_and_confirmation(session_factory) -> None:
@@ -249,6 +404,40 @@ def test_complete_booking_requires_selection_and_confirmation(session_factory) -
     restored = restarted.get_conversation(started.conversation.id)
     assert restored.session.booking.status is BookingStatus.BOOKED
     assert restored.session.booking.meeting_url == booked.view.session.booking.meeting_url
+
+
+def test_closed_booked_conversation_does_not_create_duplicate_booking(
+    session_factory,
+) -> None:
+    scheduler = RecordingScheduler(
+        now=lambda: datetime(2026, 9, 4, 12, tzinfo=timezone.utc)
+    )
+    service = make_service(
+        session_factory,
+        QueueLLM(
+            discovery_draft(),
+            qualified_draft(
+                "Quer que eu veja alguns horários disponíveis?", booking=True
+            ),
+        ),
+        scheduler=scheduler,
+    )
+    started = service.start_conversation(name="Mariana")
+    service.handle_message(started.conversation.id, "Quero ajuda.")
+    service.handle_message(started.conversation.id, "Estou pronta para avançar.")
+    service.handle_message(started.conversation.id, "sim")
+    service.handle_message(started.conversation.id, "1")
+    service.handle_message(started.conversation.id, "confirmo")
+    force_closed(session_factory, started.conversation.id)
+
+    reopened = service.handle_message(
+        started.conversation.id, "Quero marcar outra reunião."
+    )
+
+    assert reopened.output.stage is ConversationStage.BOOKED
+    assert "já tem uma reunião confirmada" in reopened.output.message
+    with session_factory() as db:
+        assert len(list(db.scalars(select(Booking)))) == 1
 
 
 def test_mock_booking_is_idempotent() -> None:

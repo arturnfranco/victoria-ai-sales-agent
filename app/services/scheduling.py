@@ -25,6 +25,10 @@ GOOGLE_CALENDAR_SCOPES = (
     "https://www.googleapis.com/auth/calendar.events.freebusy",
 )
 
+# The advisor keeps a small buffer around the customer-facing conversation.
+MEETING_EXPECTED_DURATION_MINUTES = 45
+CALENDAR_BLOCK_MINUTES = 60
+
 
 class SchedulingError(RuntimeError):
     """Safe scheduling failure."""
@@ -96,7 +100,7 @@ class DeterministicSchedulingService:
                 business_days += 1
                 for hour in range(9, 18):
                     start = datetime.combine(day, time(hour), self._timezone)
-                    end = start + timedelta(hours=1)
+                    end = start + timedelta(minutes=CALENDAR_BLOCK_MINUTES)
                     if preference and preference.earliest_time:
                         if start.timetz().replace(tzinfo=None) < preference.earliest_time:
                             continue

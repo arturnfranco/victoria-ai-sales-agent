@@ -23,11 +23,17 @@ specification does not provide them:
 - pricing or fee model;
 - minimum income or investable-assets eligibility;
 - geography and regulatory jurisdiction;
-- meeting duration and fulfillment process;
 - detailed service deliverables and contractual exclusions.
 
 Until those terms are approved, the agent must not invent them. It should say
 that a specialist can explain applicable scope and commercial terms.
+
+The initial specialist conversation takes approximately 45 minutes. The
+specialist uses it to understand the lead's context, explain the relevant
+service, answer questions, and align possible next steps. This description must
+not imply that personalized financial or investment advice will be delivered in
+the meeting. The Calendar event reserves 60 minutes, leaving a 15-minute advisor
+buffer.
 
 ## 2. Target customer
 

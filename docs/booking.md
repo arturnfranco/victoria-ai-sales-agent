@@ -6,7 +6,9 @@ deterministic mock, so the complete flow can be tested without Google:
     SCHEDULING_PROVIDER=mock
 
 Availability uses America/Recife, Monday through Friday from 09:00 to 18:00,
-60-minute meetings, at least 24 hours' notice, and the next 10 business days.
+60-minute Calendar blocks, at least 24 hours' notice, and the next 10 business
+days. The customer-facing conversation takes approximately 45 minutes; the
+remaining 15 minutes are an advisor buffer.
 Brazilian national and Pernambuco state holidays are excluded. Additional
 company or municipal closures can be configured as comma-separated ISO dates:
 

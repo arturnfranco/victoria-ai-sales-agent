@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import unicodedata
 import uuid
@@ -33,14 +34,20 @@ from app.schemas import (
     NextAction,
     SalesAgentOutput,
 )
+from app.services.guardrails import GuardrailKind, inspect_message
 from app.services.llm import LLMService, OpenAIResponsesService
 from app.services.prompts import PromptLoader
+from app.services.sales_rules import message_offers_booking
 from app.services.scheduling import (
+    MEETING_EXPECTED_DURATION_MINUTES,
     SchedulingError,
     SchedulingService,
     SlotUnavailableError,
     build_scheduling_service,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class ConversationNotFoundError(LookupError):
@@ -137,12 +144,20 @@ class SalesService:
 
         booking_result: BookingResult | None = None
         turn_id = uuid.uuid4().hex[:12]
-        booking_turn = self._handle_booking_workflow(
+        booking_turn = self._handle_closed_reengagement(
             view.session,
+            view.messages,
             clean_content,
-            view.lead.name or "Lead",
-            view.lead.email,
+            turn_id=turn_id,
+            conversation_id=str(resolved_id),
         )
+        if booking_turn is None:
+            booking_turn = self._handle_booking_workflow(
+                view.session,
+                clean_content,
+                view.lead.name or "Lead",
+                view.lead.email,
+            )
         if booking_turn is None:
             output = self._agent.handle_message(
                 view.session,
@@ -215,6 +230,96 @@ class SalesService:
             output=output, view=self.get_conversation(resolved_id)
         )
 
+    def _handle_closed_reengagement(
+        self,
+        session: ConversationSession,
+        messages: tuple[Message, ...],
+        content: str,
+        *,
+        turn_id: str,
+        conversation_id: str,
+    ) -> tuple[SalesAgentOutput, BookingResult | None] | None:
+        if session.stage is not ConversationStage.CLOSED:
+            return None
+
+        decision = inspect_message(content)
+        if decision is not None and decision.kind in {
+            GuardrailKind.OUT_OF_SCOPE,
+            GuardrailKind.SENSITIVE_CREDENTIALS,
+        }:
+            return None
+
+        state = session.booking
+        normalized = _normalize(content)
+        booking_intent = _requests_booking(normalized)
+        if state.status is BookingStatus.BOOKED:
+            session.stage = ConversationStage.BOOKED
+            logger.info(
+                "sales_conversation_reopened turn_id=%s conversation_id=%s "
+                "reason=existing_booking restored_stage=%s",
+                turn_id,
+                conversation_id,
+                session.stage.value,
+            )
+            label = (
+                _format_slot(state.selected_slot)
+                if state.selected_slot is not None
+                else "o horário já confirmado"
+            )
+            return (
+                self._booking_output(
+                    session,
+                    content,
+                    f"Você já tem uma reunião confirmada para {label}. "
+                    "Não vou criar um segundo agendamento.",
+                    NextAction.BOOK_MEETING,
+                    stage=ConversationStage.BOOKED,
+                ),
+                None,
+            )
+
+        prior_offer = state.status in {
+            BookingStatus.OFFERED,
+            BookingStatus.SLOTS_PRESENTED,
+            BookingStatus.AWAITING_CONFIRMATION,
+            BookingStatus.DEFERRED,
+        } or any(
+            message.role == MessageRole.ASSISTANT.value
+            and message_offers_booking(message.content)
+            for message in messages
+        )
+        if booking_intent and prior_offer:
+            state.status = BookingStatus.OFFERED
+            state.offered_slots = []
+            state.selected_slot = None
+            state.operation_id = None
+            state.provider_event_id = None
+            state.meeting_url = None
+            if session.last_output is not None:
+                session.last_output = session.last_output.model_copy(
+                    update={"objection": None}
+                )
+            session.stage = ConversationStage.BOOKING
+            logger.info(
+                "sales_conversation_reopened turn_id=%s conversation_id=%s "
+                "reason=booking_intent restored_stage=%s",
+                turn_id,
+                conversation_id,
+                session.stage.value,
+            )
+            return self._present_slots(session, content), None
+
+        restored_stage = _last_resumable_stage(messages)
+        session.stage = restored_stage
+        logger.info(
+            "sales_conversation_reopened turn_id=%s conversation_id=%s "
+            "reason=relevant_message restored_stage=%s",
+            turn_id,
+            conversation_id,
+            restored_stage.value,
+        )
+        return None
+
     def _handle_booking_workflow(
         self,
         session: ConversationSession,
@@ -224,6 +329,40 @@ class SalesService:
     ) -> tuple[SalesAgentOutput, BookingResult | None] | None:
         state = session.booking
         normalized = _normalize(content)
+
+        if _requests_meeting_information(normalized) and (
+            session.stage in {ConversationStage.BOOKING, ConversationStage.OBJECTION}
+            or state.status is not BookingStatus.NOT_OFFERED
+        ):
+            message = (
+                f"A conversa costuma durar cerca de "
+                f"{MEETING_EXPECTED_DURATION_MINUTES} minutos. O especialista vai "
+                "entender seu contexto, explicar o serviço mais relevante, responder "
+                "às suas perguntas e alinhar possíveis próximos passos."
+            )
+            next_action = NextAction.CONTINUE_DISCOVERY
+            if state.status is BookingStatus.SLOTS_PRESENTED:
+                message += " Alguma das opções que enviei funciona para você?"
+                next_action = NextAction.PRESENT_SLOTS
+            elif (
+                state.status is BookingStatus.AWAITING_CONFIRMATION
+                and state.selected_slot is not None
+            ):
+                message += (
+                    f" Posso confirmar o horário de "
+                    f"{_format_slot(state.selected_slot)}?"
+                )
+                next_action = NextAction.CONFIRM_BOOKING
+            return (
+                self._booking_output(
+                    session,
+                    content,
+                    message,
+                    next_action,
+                    clear_objection=True,
+                ),
+                None,
+            )
 
         wants_slots = _is_affirmative(normalized) or bool(
             re.search(
@@ -419,18 +558,20 @@ class SalesService:
         next_action: NextAction,
         *,
         stage: ConversationStage = ConversationStage.BOOKING,
+        clear_objection: bool = False,
     ) -> SalesAgentOutput:
         previous = session.last_output
         if previous is None:
             raise PersistenceStateError("booking flow requires prior sales state")
-        output = previous.model_copy(
-            update={
-                "message": message,
-                "stage": stage,
-                "should_offer_booking": False,
-                "next_action": next_action,
-            }
-        )
+        updates = {
+            "message": message,
+            "stage": stage,
+            "should_offer_booking": False,
+            "next_action": next_action,
+        }
+        if clear_objection:
+            updates["objection"] = None
+        output = previous.model_copy(update=updates)
         session.messages.extend(
             [
                 ConversationMessage(role=MessageRole.USER, content=content),
@@ -552,6 +693,53 @@ def _requests_availability(value: str) -> bool:
             value,
         )
     )
+
+
+def _requests_booking(value: str) -> bool:
+    changed_mind = bool(re.fullmatch(r"\s*mudei de ideia\s*[.!]?\s*", value))
+    return changed_mind or _is_affirmative(value) or bool(
+        re.search(
+            r"\b(?:mudei de ideia|quero|gostaria de|vamos|pode).*(?:agendar|marcar|"
+            r"horarios?|agenda|conversa|reuniao)\b",
+            value,
+        )
+    ) or _requests_availability(value)
+
+
+def _requests_meeting_information(value: str) -> bool:
+    subject = bool(
+        re.search(r"\b(?:reuniao|conversa|encontro|agendamento|chamada|call)\b", value)
+    )
+    duration = bool(
+        re.search(
+            r"\b(?:quanto tempo|qual (?:e )?a duracao|duracao|quanto dura|demora)\b",
+            value,
+        )
+    )
+    process = bool(
+        re.search(r"\b(?:como funciona|como (?:e|sera)|o que acontece)\b", value)
+    )
+    return subject and (duration or process)
+
+
+def _last_resumable_stage(messages: tuple[Message, ...]) -> ConversationStage:
+    resumable = {
+        ConversationStage.OPENING,
+        ConversationStage.DISCOVERY,
+        ConversationStage.QUALIFICATION,
+        ConversationStage.OBJECTION,
+        ConversationStage.BOOKING,
+    }
+    for message in reversed(messages):
+        try:
+            stage = ConversationStage(message.stage)
+        except ValueError:
+            continue
+        if stage in resumable:
+            return stage
+        if stage is ConversationStage.NO_FIT:
+            return ConversationStage.DISCOVERY
+    return ConversationStage.OPENING
 
 
 def _parse_availability_preference(
