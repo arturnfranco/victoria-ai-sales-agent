@@ -1604,6 +1604,8 @@ Persist commercial data and provide an internal interface for interacting with t
 - [x] Create basic Leads view.
 - [x] Create basic Conversations view.
 - [x] Verify persistence survives application restart.
+- [x] Reconcile qualified booking replies with a canonical visible CTA.
+- [x] Add state-aware retry guidance when an active objection blocks booking.
 
 **Deliverable:** persistent local MVP.
 

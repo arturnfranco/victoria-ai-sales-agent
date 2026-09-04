@@ -457,6 +457,35 @@ def test_agent_reconciles_high_fit_to_booking() -> None:
     assert output.next_action is NextAction.OFFER_BOOKING
 
 
+def test_agent_adds_canonical_cta_when_booking_wording_is_not_detected() -> None:
+    high_evidence = qualification(
+        need=EvidenceLevel.STRONG,
+        complexity=EvidenceLevel.STRONG,
+        readiness=EvidenceLevel.STRONG,
+        urgency=EvidenceLevel.STRONG,
+        service_fit=EvidenceLevel.STRONG,
+    )
+    llm = QueueLLM(
+        draft(
+            message="Faz sentido avançarmos para uma conversa com um especialista?",
+            stage="BOOKING",
+            planning=True,
+            investment=True,
+            booking=True,
+            evidence=high_evidence,
+        )
+    )
+    output = SalesAgent(llm).handle_message(
+        ConversationSession(stage=ConversationStage.DISCOVERY),
+        "Quero organizar isso com ajuda profissional.",
+    )
+    assert len(llm.requests) == 1
+    assert output.stage is ConversationStage.BOOKING
+    assert output.should_offer_booking
+    assert output.message.endswith("Quer que eu veja alguns horários disponíveis?")
+    assert message_offers_booking(output.message)
+
+
 def test_explicit_objection_blocks_booking_and_sets_objection_state() -> None:
     strong = qualification(
         need=EvidenceLevel.VERY_STRONG,
@@ -472,6 +501,45 @@ def test_explicit_objection_blocks_booking_and_sets_objection_state() -> None:
     )
     assert output.objection is ObjectionType.TIME
     assert output.stage is ConversationStage.OBJECTION
+    assert not output.should_offer_booking
+
+
+def test_booking_during_time_objection_retries_with_specific_correction() -> None:
+    strong = qualification(
+        need=EvidenceLevel.VERY_STRONG,
+        complexity=EvidenceLevel.STRONG,
+        readiness=EvidenceLevel.STRONG,
+        urgency=EvidenceLevel.STRONG,
+        service_fit=EvidenceLevel.STRONG,
+    )
+    invalid = draft(
+        message="Quer que eu veja alguns horários disponíveis?",
+        stage="BOOKING",
+        planning=True,
+        investment=True,
+        objection="TIME",
+        booking=True,
+        evidence=strong,
+    )
+    corrected = draft(
+        message="Entendo. O que ajudaria a tornar esse cuidado viável na sua rotina?",
+        stage="OBJECTION",
+        planning=True,
+        investment=True,
+        objection="TIME",
+        booking=False,
+        evidence=strong,
+    )
+    llm = QueueLLM(invalid, corrected)
+    output = SalesAgent(llm).handle_message(
+        ConversationSession(stage=ConversationStage.OBJECTION),
+        "Minha rotina continua sem espaço para uma reunião.",
+    )
+    assert len(llm.requests) == 2
+    assert "A objeção TIME está ativa" in llm.requests[1].instructions
+    assert "should_offer_booking=false" in llm.requests[1].instructions
+    assert output.stage is ConversationStage.OBJECTION
+    assert output.objection is ObjectionType.TIME
     assert not output.should_offer_booking
 
 

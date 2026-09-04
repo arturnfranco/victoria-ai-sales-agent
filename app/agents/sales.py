@@ -40,6 +40,10 @@ logger = logging.getLogger(__name__)
 class DraftConsistencyError(ValueError):
     """Raised when generated metadata conflicts with deterministic policy."""
 
+    def __init__(self, message: str, *, retry_instruction: str | None = None) -> None:
+        super().__init__(message)
+        self.retry_instruction = retry_instruction
+
 
 class SalesAgent:
     """Orchestrate one safe, structured sales turn at a time."""
@@ -84,6 +88,7 @@ class SalesAgent:
             "Use apenas fatos presentes no histórico fornecido."
         )
         last_error: Exception | None = None
+        retry_instruction: str | None = None
         for attempt in range(self._max_attempts):
             instructions = base_instructions
             if attempt:
@@ -91,6 +96,8 @@ class SalesAgent:
                     "\nA saída anterior foi inválida ou contrariou regras "
                     "determinísticas. Corrija-a sem inventar informações."
                 )
+                if retry_instruction:
+                    instructions += f"\nCorreção obrigatória: {retry_instruction}"
             request = LLMRequest(
                 instructions=instructions,
                 messages=messages,
@@ -101,11 +108,15 @@ class SalesAgent:
                 raw = self._llm.complete(request)
                 draft = SalesAgentDraft.model_validate(raw)
                 output = self._finalize(session.stage, inbound.content, draft)
-            except (
-                DraftConsistencyError,
-                LLMServiceError,
-                ValidationError,
-            ) as exc:
+            except DraftConsistencyError as exc:
+                last_error = exc
+                retry_instruction = exc.retry_instruction
+                logger.warning(
+                    "sales_agent_failure category=structured_output attempt=%d",
+                    attempt + 1,
+                )
+                continue
+            except (LLMServiceError, ValidationError) as exc:
                 last_error = exc
                 logger.warning(
                     "sales_agent_failure category=structured_output attempt=%d",
@@ -138,11 +149,34 @@ class SalesAgent:
             objection=objection,
         )
         visible_booking_cta = message_offers_booking(draft.message)
-        if (
-            draft.should_offer_booking is not booking_ready
-            or visible_booking_cta is not booking_ready
-        ):
-            raise DraftConsistencyError("booking CTA conflicts with deterministic policy")
+        if draft.should_offer_booking is not booking_ready:
+            retry = None
+            if objection is not None:
+                retry = (
+                    f"A objeção {objection.value} está ativa. Use proposed_stage="
+                    "OBJECTION, should_offer_booking=false, reconheça e trate a "
+                    "objeção sem convidar para reunião, agendamento ou horários."
+                )
+            raise DraftConsistencyError(
+                "booking CTA conflicts with deterministic policy",
+                retry_instruction=retry,
+            )
+
+        message = draft.message
+        if booking_ready and not visible_booking_cta:
+            message = f"{message.rstrip()} Quer que eu veja alguns horários disponíveis?"
+        elif not booking_ready and visible_booking_cta:
+            retry = None
+            if objection is not None:
+                retry = (
+                    f"A objeção {objection.value} está ativa. Use proposed_stage="
+                    "OBJECTION, should_offer_booking=false, reconheça e trate a "
+                    "objeção sem convidar para reunião, agendamento ou horários."
+                )
+            raise DraftConsistencyError(
+                "booking CTA conflicts with deterministic policy",
+                retry_instruction=retry,
+            )
 
         fit = result.fit
         if service is ServiceRoute.NO_CURRENT_FIT:
@@ -165,7 +199,7 @@ class SalesAgent:
             )
 
         return SalesAgentOutput(
-            message=draft.message,
+            message=message,
             stage=stage,
             service=service,
             fit=fit,
