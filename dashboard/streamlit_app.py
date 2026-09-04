@@ -72,10 +72,14 @@ def render_state(view) -> None:
 def render_playground(service: SalesService) -> None:
     st.header("Playground")
     conversations = service.list_conversations()
+    conversation_views = {
+        str(item.id): service.get_conversation(item.id) for item in conversations
+    }
     labels = {
         str(item.id): (
             f"{item.started_at:%d/%m/%Y %H:%M} · "
-            f"{item.current_stage} · {str(item.id)[:8]}"
+            f"{conversation_views[str(item.id)].lead.name or 'Lead'} · "
+            f"{item.current_stage}"
         )
         for item in conversations
     }
@@ -111,7 +115,7 @@ def render_playground(service: SalesService) -> None:
         format_func=lambda value: labels[value],
     )
     st.session_state.conversation_id = selected_id
-    view = service.get_conversation(selected_id)
+    view = conversation_views[selected_id]
 
     chat, state = st.columns([2, 1])
     with chat:
@@ -120,10 +124,18 @@ def render_playground(service: SalesService) -> None:
             with st.chat_message(message.role):
                 st.write(message.content)
                 st.caption(message.stage)
+        pending_turn = st.container()
         if user_message := st.chat_input("Digite a mensagem do lead"):
-            with st.spinner("VictorIA está respondendo..."):
-                service.handle_message(selected_id, user_message)
-            st.rerun()
+            with pending_turn:
+                with st.chat_message("user"):
+                    st.write(user_message)
+                    st.caption(view.session.stage.value)
+                with st.spinner("VictorIA está respondendo..."):
+                    result = service.handle_message(selected_id, user_message)
+                with st.chat_message("assistant"):
+                    st.write(result.output.message)
+                    st.caption(result.output.stage.value)
+            view = result.view
     with state:
         render_state(view)
 
