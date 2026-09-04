@@ -1584,28 +1584,30 @@ Persist commercial data and provide an internal interface for interacting with t
 
 **Todo**
 
-- [ ] Create Supabase project.
-- [ ] Configure PostgreSQL connection.
-- [ ] Configure SQLAlchemy.
-- [ ] Create `leads` table/model.
-- [ ] Create `conversations` table/model.
-- [ ] Create `messages` table/model.
-- [ ] Create `evaluations` table/model.
-- [ ] Create database migrations or reproducible schema setup.
-- [ ] Implement lead repository.
-- [ ] Implement conversation repository.
-- [ ] Implement message persistence.
-- [ ] Persist prompt version per conversation.
-- [ ] Create Streamlit application shell.
-- [ ] Create Playground page.
-- [ ] Connect Playground to the same Sales Service used by other channels.
-- [ ] Display conversation history.
-- [ ] Display current qualification state during testing.
-- [ ] Create basic Leads view.
-- [ ] Create basic Conversations view.
-- [ ] Verify persistence survives application restart.
+- [x] Create Supabase project.
+- [x] Configure PostgreSQL connection.
+- [x] Configure SQLAlchemy.
+- [x] Create `leads` table/model.
+- [x] Create `conversations` table/model.
+- [x] Create `messages` table/model.
+- [x] Create `evaluations` table/model.
+- [x] Create database migrations or reproducible schema setup.
+- [x] Implement lead repository.
+- [x] Implement conversation repository.
+- [x] Implement message persistence.
+- [x] Persist prompt version per conversation.
+- [x] Create Streamlit application shell.
+- [x] Create Playground page.
+- [x] Connect Playground to the same Sales Service used by other channels.
+- [x] Display conversation history.
+- [x] Display current qualification state during testing.
+- [x] Create basic Leads view.
+- [x] Create basic Conversations view.
+- [x] Verify persistence survives application restart.
 
 **Deliverable:** persistent local MVP.
+
+**Milestone:** [x] Phase 3 confirmed complete by the user.
 
 **Phase complete when:** a conversation can be started in Streamlit, persisted to PostgreSQL and reopened with its state intact.
 
